@@ -268,6 +268,7 @@ static const char * const audio_interfaces[] = {
     AUDIO_HARDWARE_MODULE_ID_PRIMARY,
     AUDIO_HARDWARE_MODULE_ID_A2DP,
     AUDIO_HARDWARE_MODULE_ID_USB,
+    AUDIO_HARDWARE_MODULE_ID_HDMI,
 };
 #define ARRAY_SIZE(x) (sizeof((x))/sizeof(((x)[0])))
 

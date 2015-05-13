@@ -51,6 +51,9 @@ enum player_type {
     // The shared library with the test player is passed passed as an
     // argument to the 'test:' url in the setDataSource call.
     TEST_PLAYER = 5,
+
+    AMLOGIC_PLAYER = 110,
+    AMSUPER_PLAYER = 111,
 };
 
 
@@ -221,6 +224,15 @@ public:
 
     virtual status_t dump(int fd, const Vector<String16> &args) const {
         return INVALID_OPERATION;
+    }
+
+    // hack for hevc/h.265 mp4/ts etc. support, avoid cts fail
+    virtual status_t setHEVCFlag(bool flag) {
+        return INVALID_OPERATION;
+    }
+
+    virtual bool getHEVCFlag() {
+        return false;
     }
 
 private:

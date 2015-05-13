@@ -50,6 +50,10 @@
 
 #include "include/avc_utils.h"
 
+#ifdef USE_AM_SOFT_DEMUXER_CODEC
+#include <media/stagefright/AmMediaDefsExt.h>
+#endif
+
 namespace android {
 
 // OMX errors are directly mapped into status_t range if
@@ -202,7 +206,9 @@ private:
             IOMX::buffer_id bufferID,
             size_t rangeOffset, size_t rangeLength,
             OMX_U32 flags,
-            int64_t timeUs);
+            int64_t timeUs,
+            void *platformPrivate,
+            void *dataPtr);
 
     void getMoreInputDataIfPossible();
 
@@ -628,16 +634,19 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
         return err;
     }
 
-    err = native_window_set_buffers_geometry(
+    if (!strcmp(mComponentName.c_str(), "OMX.google.h265.decoder")
+	&& def.format.video.eColorFormat == OMX_AML_COLOR_FormatYV12) {
+        err = native_window_set_buffers_geometry(
+            mNativeWindow.get(),
+            def.format.video.nFrameWidth,
+            def.format.video.nFrameHeight,
+            HAL_PIXEL_FORMAT_YV12);
+    } else {
+        err = native_window_set_buffers_geometry(
             mNativeWindow.get(),
             def.format.video.nFrameWidth,
             def.format.video.nFrameHeight,
             def.format.video.eColorFormat);
-
-    if (err != 0) {
-        ALOGE("native_window_set_buffers_geometry failed: %s (%d)",
-                strerror(-err), -err);
-        return err;
     }
 
     if (mRotationDegrees != 0) {
@@ -663,11 +672,15 @@ status_t ACodec::configureOutputBuffersFromNativeWindow(
 
     // Set up the native window.
     OMX_U32 usage = 0;
-    err = mOMX->getGraphicBufferUsage(mNode, kPortIndexOutput, &usage);
-    if (err != 0) {
-        ALOGW("querying usage flags from OMX IL component failed: %d", err);
-        // XXX: Currently this error is logged, but not fatal.
-        usage = 0;
+    if (!strcmp(mComponentName.c_str(), "OMX.google.h265.decoder")) {
+        usage |= GRALLOC_USAGE_SW_READ_NEVER | GRALLOC_USAGE_SW_WRITE_OFTEN;
+    } else {
+        err = mOMX->getGraphicBufferUsage(mNode, kPortIndexOutput, &usage);
+        if (err != 0) {
+            ALOGW("querying usage flags from OMX IL component failed: %d", err);
+            // XXX: Currently this error is logged, but not fatal.
+            usage = 0;
+        }
     }
     int omxUsage = usage;
 
@@ -1121,6 +1134,22 @@ status_t ACodec::setComponentRole(
             "audio_decoder.ac3", "audio_encoder.ac3" },
         { MEDIA_MIMETYPE_AUDIO_EAC3,
             "audio_decoder.eac3", "audio_encoder.eac3" },
+
+        { MEDIA_MIMETYPE_VIDEO_RM,
+            "video_decoder.rm", "video_encoder.rm"},
+
+#ifdef USE_AM_SOFT_DEMUXER_CODEC
+        { MEDIA_MIMETYPE_VIDEO_VP6,
+            "video_decoder.amvp6", "video_encoder.amvp6" },
+        { MEDIA_MIMETYPE_VIDEO_VP6A,
+            "video_decoder.amvp6a", "video_encoder.amvp6a" },
+        { MEDIA_MIMETYPE_VIDEO_VP6F,
+            "video_decoder.amvp6f", "video_encoder.amvp6f" },
+        { MEDIA_MIMETYPE_VIDEO_HEVC,
+            "video_decoder.amh265", "video_encoder.amh265" },
+        { MEDIA_MIMETYPE_VIDEO_RM,
+            "video_decoder.rm", "video_encoder.rm"}, 
+#endif
     };
 
     static const size_t kNumMimeToRole =
@@ -2292,6 +2321,8 @@ static const struct VideoCodingMapEntry {
     { MEDIA_MIMETYPE_VIDEO_MPEG2, OMX_VIDEO_CodingMPEG2 },
     { MEDIA_MIMETYPE_VIDEO_VP8, OMX_VIDEO_CodingVP8 },
     { MEDIA_MIMETYPE_VIDEO_VP9, OMX_VIDEO_CodingVP9 },
+    { MEDIA_MIMETYPE_VIDEO_HEVC, OMX_VIDEO_CodingHEVC },
+    { MEDIA_MIMETYPE_VIDEO_RM, OMX_VIDEO_CodingRV},
 };
 
 static status_t GetVideoCodingTypeFromMime(
@@ -4203,17 +4234,25 @@ bool ACodec::BaseState::onOMXMessage(const sp<AMessage> &msg) {
 
             int32_t rangeOffset, rangeLength, flags;
             int64_t timeUs;
+            void *platformPrivate;
+            void *dataPtr;
 
             CHECK(msg->findInt32("range_offset", &rangeOffset));
             CHECK(msg->findInt32("range_length", &rangeLength));
             CHECK(msg->findInt32("flags", &flags));
             CHECK(msg->findInt64("timestamp", &timeUs));
+            //CHECK(msg->findPointer("platform_private", (void **)&platformPrivate));
+            //CHECK(msg->findPointer("data_ptr", (void **)&dataPtr));
+            platformPrivate = NULL;
+            dataPtr = NULL;
 
             return onOMXFillBufferDone(
                     bufferID,
                     (size_t)rangeOffset, (size_t)rangeLength,
                     (OMX_U32)flags,
-                    timeUs);
+                    timeUs,
+                    platformPrivate,
+                    dataPtr);
         }
 
         default:
@@ -4505,8 +4544,10 @@ bool ACodec::BaseState::onOMXFillBufferDone(
         IOMX::buffer_id bufferID,
         size_t rangeOffset, size_t rangeLength,
         OMX_U32 flags,
-        int64_t timeUs) {
-    ALOGV("[%s] onOMXFillBufferDone %u time %" PRId64 " us, flags = 0x%08x",
+        int64_t timeUs,
+        void *platformPrivate,
+        void *dataPtr) {
+    ALOGV("[%s] onOMXFillBufferDone %p time %lld us, flags = 0x%08lx",
          mCodec->mComponentName.c_str(), bufferID, timeUs, flags);
 
     ssize_t index;

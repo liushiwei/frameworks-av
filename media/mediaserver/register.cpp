@@ -13,9 +13,65 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#define LOG_TAG "Register"
+#include <utils/Log.h>
+#include <cutils/properties.h>
+#include <utils/threads.h>
+#include <utils/KeyedVector.h>
 
 #include "RegisterExtensions.h"
+#include "../libmediaplayerservice/SharedLibrary.h"
+
+namespace android {
+
+static sp<SharedLibrary> libamlogicmedia;
+static bool  LoadAndInitAmlogicMediaFactory(void)
+{
+	sp<SharedLibrary> mLibrary;
+	int err;
+	String8 name("libmedia_amlogic.so");
+	mLibrary = new SharedLibrary(name);
+    if (!*mLibrary) {
+       ALOGE("load libmedia_amlogic.so for amlogicmedia failed:%s", mLibrary->lastError());
+       return false;
+    }
+	typedef int (*init_fun)(void);
+
+    init_fun init =
+        (init_fun)mLibrary->lookup("_ZN7android23AmlogicMediaFactoryInitEv");
+
+    if (init == NULL) {
+       ALOGE("AmlogicMediaFactoryInit failed:%s", mLibrary->lastError());
+       mLibrary.clear();
+       return false;
+    }
+	err=init();
+	if(err != 0){
+		ALOGE("AmlogicMediaFactoryInit failed:%s", mLibrary->lastError());
+		return false;
+	}
+
+    init = (init_fun)mLibrary->lookup("_ZN7android35AmlogicMetadataRetrieverFactoryInitEv");
+
+    if (init == NULL) {
+       ALOGE("AmlogicMetadataRetrieverFactoryInit failed:%s", mLibrary->lastError());
+       return false;
+    }
+	err=init();
+	if (err != 0) {
+		ALOGE("AmlogicMetadataRetrieverFactoryInit failed:%s", mLibrary->lastError());
+		return false;
+	}
+
+   libamlogicmedia =mLibrary;
+   return true;
+}
+
+}
 
 void registerExtensions()
 {
+	android::LoadAndInitAmlogicMediaFactory();
 }
+
+

@@ -128,6 +128,20 @@ status_t convertMetaDataToMessage(
         if (meta->findInt32(kKeyRotation, &rotationDegrees)) {
             msg->setInt32("rotation-degrees", rotationDegrees);
         }
+
+        int32_t stride;
+        if (meta->findInt32(kKeyStride, &stride)) {
+            msg->setInt32("stride", stride);
+        } else {
+            msg->setInt32("stride", width);
+        }
+
+        int32_t sliceHeight;
+        if (meta->findInt32(kKeySliceHeight, &sliceHeight)) {
+            msg->setInt32("slice-height", sliceHeight);
+        } else {
+            msg->setInt32("slice-height", height);
+        }
     } else if (!strncasecmp("audio/", mime, 6)) {
         int32_t numChannels, sampleRate;
         CHECK(meta->findInt32(kKeyChannelCount, &numChannels));

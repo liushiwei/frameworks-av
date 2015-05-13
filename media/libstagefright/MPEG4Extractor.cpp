@@ -1972,6 +1972,56 @@ status_t MPEG4Extractor::parseChunk(off64_t *offset, int depth) {
 
             break;
         }
+        case FOURCC('a','l','a','c'):
+        {
+            uint8_t buffer[8 + 20];
+            if (chunk_data_size < (ssize_t)sizeof(buffer)) {
+                 ALOGI("TRACE: ERR-> offset=%lld  line=%d\n", *offset, __LINE__);
+                return ERROR_MALFORMED;
+            }
+
+            if (mDataSource->readAt(data_offset, buffer, sizeof(buffer)) < (ssize_t)sizeof(buffer)) {
+                 ALOGI("TRACE: ERR-> offset=%lld  line=%d\n", *offset, __LINE__);
+                return ERROR_IO;
+            }
+
+            uint16_t data_ref_index = U16_AT(&buffer[6]);
+            uint16_t num_channels = U16_AT(&buffer[16]);
+            uint16_t sample_size = U16_AT(&buffer[18]);
+            uint32_t sample_rate = U32_AT(&buffer[24]) >> 16;
+            mLastTrack->meta->setCString(kKeyMIMEType, MEDIA_MIMETYPE_AUDIO_ALAC);
+            mLastTrack->meta->setInt32(kKeySampleRate, sample_rate);
+            mLastTrack->meta->setInt32(kKeyChannelCount, num_channels);
+
+            off64_t stop_offset = *offset + chunk_size;
+            *offset = data_offset + sizeof(buffer);
+
+            //------------------------------
+            int extra_size=stop_offset-(*offset);
+            int8_t *extra_buf = new int8_t[extra_size ];
+            ALOGI("TRACE: num_channels=%d sample_rate=%d extra_size=%d line=%d\n",
+                             num_channels,sample_rate,extra_size,__LINE__);
+            if (mDataSource->readAt(*offset, extra_buf, extra_size) != (ssize_t)extra_size)
+            {
+                delete[] buffer;
+                extra_buf = NULL;
+                ALOGI("TRACE: ERR-> offset=%lld  line=%d\n", *offset, __LINE__);
+                return ERROR_IO;
+
+            }
+            ALOGI("TRACE: extra_buf[0-3]:%x %x %x %x  \n",extra_buf[0],extra_buf[1],extra_buf[2],extra_buf[3]);
+            ALOGI("TRACE: extra_buf[4-7]:%c %c %c %c  \n",extra_buf[4],extra_buf[5],extra_buf[6],extra_buf[7]);
+            mLastTrack->meta->setData(kKeyExtraData,0,extra_buf,extra_size);
+            mLastTrack->meta->setInt32(kKeyExtraDataSize,extra_size);
+
+           *offset += extra_size;
+            if (*offset != stop_offset) {
+                 ALOGI("TRACE: ERR-> offset=%lld  line=%d\n", *offset, __LINE__);
+                return ERROR_MALFORMED;
+            }
+            //------------------------------
+            break;
+        }
 
         case FOURCC('-', '-', '-', '-'):
         {

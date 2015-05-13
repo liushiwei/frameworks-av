@@ -270,7 +270,7 @@ class NuPlayerFactory : public MediaPlayerFactory::IFactory {
     virtual float scoreFactory(const sp<IMediaPlayer>& /*client*/,
                                const sp<IStreamSource>& /*source*/,
                                float /*curScore*/) {
-        return 1.0;
+        return 0.8;
     }
 
     virtual sp<MediaPlayerBase> createPlayer() {

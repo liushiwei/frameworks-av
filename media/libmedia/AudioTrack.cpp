@@ -343,7 +343,9 @@ status_t AudioTrack::set(
     if (flags & AUDIO_OUTPUT_FLAG_DIRECT) {
         if (audio_is_linear_pcm(format)) {
             mFrameSize = channelCount * audio_bytes_per_sample(format);
-        } else {
+        } else if(audio_is_raw_data(format)) {
+            mFrameSize = channelCount * sizeof(int16_t);
+        }else{
             mFrameSize = sizeof(uint8_t);
         }
         mFrameSizeAF = mFrameSize;
@@ -1007,7 +1009,7 @@ status_t AudioTrack::createTrack_l()
     mNotificationFramesAct = mNotificationFramesReq;
 
     size_t frameCount = mReqFrameCount;
-    if (!audio_is_linear_pcm(mFormat)) {
+    if (!audio_is_linear_pcm(mFormat)&&!audio_is_raw_data(mFormat)) {
 
         if (mSharedBuffer != 0) {
             // Same comment as below about ignoring frameCount parameter for set()
