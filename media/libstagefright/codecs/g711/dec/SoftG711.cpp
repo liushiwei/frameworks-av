@@ -42,6 +42,7 @@ SoftG711::SoftG711(
     : SimpleSoftOMXComponent(name, callbacks, appData, component),
       mIsMLaw(true),
       mNumChannels(1),
+      mSampleRate(8000),
       mSignalledError(false) {
     if (!strcmp(name, "OMX.google.g711.alaw.decoder")) {
         mIsMLaw = false;
@@ -117,19 +118,12 @@ OMX_ERRORTYPE SoftG711::internalGetParameter(
             pcmParams->eEndian = OMX_EndianBig;
             pcmParams->bInterleaved = OMX_TRUE;
             pcmParams->nBitPerSample = 16;
-            if (pcmParams->nPortIndex == 0) {
-                // input port
-                pcmParams->ePCMMode = mIsMLaw ? OMX_AUDIO_PCMModeMULaw
-                                              : OMX_AUDIO_PCMModeALaw;
-            } else {
-                // output port
-                pcmParams->ePCMMode = OMX_AUDIO_PCMModeLinear;
-            }
+            pcmParams->ePCMMode = OMX_AUDIO_PCMModeLinear;
             pcmParams->eChannelMapping[0] = OMX_AUDIO_ChannelLF;
             pcmParams->eChannelMapping[1] = OMX_AUDIO_ChannelRF;
 
             pcmParams->nChannels = mNumChannels;
-            pcmParams->nSamplingRate = 8000;
+            pcmParams->nSamplingRate = mSampleRate;//8000;
 
             return OMX_ErrorNone;
         }
@@ -157,6 +151,7 @@ OMX_ERRORTYPE SoftG711::internalSetParameter(
 
             if(pcmParams->nPortIndex == 0) {
                 mNumChannels = pcmParams->nChannels;
+				mSampleRate = pcmParams->nSamplingRate;
             }
 
             return OMX_ErrorNone;
@@ -189,7 +184,7 @@ OMX_ERRORTYPE SoftG711::internalSetParameter(
     }
 }
 
-void SoftG711::onQueueFilled(OMX_U32 /* portIndex */) {
+void SoftG711::onQueueFilled(OMX_U32 portIndex) {
     if (mSignalledError) {
         return;
     }
@@ -219,7 +214,7 @@ void SoftG711::onQueueFilled(OMX_U32 /* portIndex */) {
         }
 
         if (inHeader->nFilledLen > kMaxNumSamplesPerFrame) {
-            ALOGE("input buffer too large (%d).", inHeader->nFilledLen);
+            ALOGE("input buffer too large (%ld).", inHeader->nFilledLen);
 
             notify(OMX_EventError, OMX_ErrorUndefined, 0, NULL);
             mSignalledError = true;
